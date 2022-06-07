@@ -9,10 +9,10 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.decomposition import IncrementalPCA
 
 import spikeinterface as si
-from ..utils import get_random_data_chunks
-from ..postprocessing import get_template_channel_sparsity
+from spikeinterface.toolkit.utils import get_random_data_chunks
+from spikeinterface.toolkit.postprocessing import get_template_channel_sparsity
 
-from ..postprocessing import WaveformPrincipalComponent
+from spikeinterface.toolkit.postprocessing import WaveformPrincipalComponent
 
 from .misc_metrics import compute_num_spikes
 

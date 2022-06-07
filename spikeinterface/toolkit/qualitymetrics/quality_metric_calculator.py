@@ -6,10 +6,9 @@ import numpy as np
 import pandas as pd
 
 from spikeinterface.core.waveform_extractor import WaveformExtractor, BaseWaveformExtractorExtension
-
-from .quality_metric_list import (_metric_name_to_func,
-                                  calculate_pc_metrics, _possible_pc_metric_names)
-
+import spikeinterface.toolkit.qualitymetrics.metrics as metrics
+from spikeinterface.toolkit.qualitymetrics.metrics.pca_metrics import _possible_pc_metric_names
+from inspect import getmembers, isfunction
 
 class QualityMetricCalculator(BaseWaveformExtractorExtension):
     """Class to compute quality metrics of spike sorting output.
@@ -41,18 +40,29 @@ class QualityMetricCalculator(BaseWaveformExtractorExtension):
 
     def _set_params(self, metric_names=None, peak_sign='neg',
                     max_spikes_for_nn = 2000, n_neighbors = 6, seed=None):
-
+        self._metric_func = []
         if metric_names is None:
+
+            metric_names, self._metric_func = getmembers(metrics, isfunction)
+            metric_names = [name.split("compute_")[0] for name in metric_names]
+
             # This is too slow
             # metric_names = list(_metric_name_to_func.keys()) + _possible_pc_metric_names
 
             # So by default we take all metrics and 3 metrics PCA based only
             # 'nearest_neighbor' is really slow and not taken by default
-            metric_names = list(_metric_name_to_func.keys())
+
             if self.principal_component is not None:
                 metric_names += ['isolation_distance', 'l_ratio', 'd_prime']
+        else:
 
-        params = dict(metric_names=[str(name) for name in metric_names],
+            for name in metric_names:
+                fct = getattr(metrics, "compute_"+ name, None)
+                if fct is None and name not in _possible_pc_metric_names:
+                        raise ValueError("This metrics name does not exist - " + name) # Way to raise just a warning ?
+                self._metric_func .append(fct)
+
+        params = dict(metric_names=metric_names,
                       peak_sign=peak_sign,
                       max_spikes_for_nn=int(max_spikes_for_nn),
                       n_neighbors=int(n_neighbors),
@@ -97,35 +107,31 @@ class QualityMetricCalculator(BaseWaveformExtractorExtension):
         unit_ids = self.sorting.unit_ids
         metrics = pd.DataFrame(index=unit_ids)
 
-        # simple metrics not based on PCs
-        for name in metric_names:
-            if name in _possible_pc_metric_names:
-                continue
-            func = _metric_name_to_func[name]
+        for func, name in zip(self._metric_func, metric_names):
 
-            # TODO add for params from different functions
-            kwargs = {k: self._params[k] for k in ('peak_sign',)}
+            if name in _possible_pc_metric_names :   # PC metric based
+                if self.principal_component is None:
+                    raise ValueError('waveform_principal_component must be provided to compute ' + name + ' metrics')
 
-            res = func(self.waveform_extractor, **kwargs)
-            if isinstance(res, dict):
-                # res is a dict convert to series
-                metrics[name] = pd.Series(res)
-            else:
-                # res is a namedtuple with several dict
-                # so several columns
-                for i, col in enumerate(res._fields):
-                    metrics[col] = pd.Series(res[i])
+                kwargs = {k: self._params[k] for k in ('max_spikes_for_nn', 'n_neighbors', 'seed')}
+                pc_metrics = calculate_pc_metrics(self.principal_component,
+                                                  metric_names=name, **kwargs)
+                for col, values in pc_metrics.items():
+                    metrics[col] = pd.Series(values)
+            else:  # Misc metrics
+                # TODO add for params from different functions
+                kwargs = {k: self._params[k] for k in ('peak_sign',)}
 
-        # metrics based on PCs
-        pc_metric_names = [k for k in metric_names if k in _possible_pc_metric_names]
-        if len(pc_metric_names):
-            if self.principal_component is None:
-                raise ValueError('waveform_principal_component must be provied')
-            kwargs = {k: self._params[k] for k in ('max_spikes_for_nn', 'n_neighbors', 'seed')}
-            pc_metrics = calculate_pc_metrics(self.principal_component,
-                                              metric_names=pc_metric_names, **kwargs)
-            for col, values in pc_metrics.items():
-                metrics[col] = pd.Series(values)
+                res = func(self.waveform_extractor, **kwargs)
+                if isinstance(res, dict):
+                    # res is a dict convert to series
+                    metrics[name] = pd.Series(res)
+                else:
+                    # res is a namedtuple with several dict
+                    # so several columns
+                    for i, col in enumerate(res._fields):
+                        metrics[col] = pd.Series(res[i])
+
 
         self._metrics = metrics
 

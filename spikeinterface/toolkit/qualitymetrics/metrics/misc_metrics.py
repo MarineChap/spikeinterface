@@ -13,8 +13,8 @@ import numpy as np
 import warnings
 import scipy.ndimage
 
-from ..utils import get_noise_levels
-from ..postprocessing import (
+from spikeinterface.toolkit.utils import get_noise_levels
+from spikeinterface.toolkit.postprocessing import (
     get_template_extremum_channel,
     get_template_extremum_amplitude,
 )
@@ -127,7 +127,7 @@ def compute_presence_ratio(waveform_extractor, num_bin_edges=101, **kwargs):
     return presence_ratio
 
 
-def compute_snrs(waveform_extractor, peak_sign='neg', **kwargs):
+def compute_snr(waveform_extractor, peak_sign='neg', **kwargs):
     """Compute signal to noise ratio.
 
     Parameters
@@ -256,7 +256,7 @@ def compute_isi_violations(waveform_extractor, isi_threshold_ms=1.5, min_isi_ms=
     return res(isi_violations_ratio, isi_violations_rate, isi_violations_count)
 
 
-def compute_amplitudes_cutoff(waveform_extractor, peak_sign='neg',
+def compute_amplitude_cutoff(waveform_extractor, peak_sign='neg',
                               num_histogram_bins=500, histogram_smoothing_value=3, **kwargs):
     """Calculate approximate fraction of spikes missing from a distribution of amplitudes.
 
